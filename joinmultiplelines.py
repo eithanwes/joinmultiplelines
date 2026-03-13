@@ -1,4 +1,4 @@
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Name:        joinmultiplelines
 # Purpose:     Join multiple lines into one continuous line
 #
@@ -46,76 +46,71 @@
 #              Support multi-part lines
 #         0.4.1: 22.01.2018
 #              Bug fix for displaying warnings
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
-from PyQt5.QtWidgets import QAction
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from qgis.core import *
-from qgis.gui import QgsMessageBar
+from pathlib import Path
 
-# initialize Qt resources from file resouces.py
-import sys
-import os.path
-sys.path.append(os.path.dirname(__file__))
-import resources
+from qgis.core import Qgis, QgsGeometry
+from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtWidgets import QAction
 
-class joinmultiplelines:
+
+class JoinMultipleLines:
     def __init__(self, iface):
         # save reference to the QGIS interface
         self.iface = iface
+        self.plugin_dir = Path(__file__).parent
 
     def initGui(self):
-        self.action = QAction(QIcon(":/plugins/joinmultiplelines/icon.png"), "Join multiple lines", self.iface.mainWindow())
+        icon_path = str(self.plugin_dir / "icon.png")
+        self.action = QAction(
+            QIcon(icon_path),
+            "Join multiple lines",
+            self.iface.mainWindow(),
+        )
         self.action.setWhatsThis("Permanently join multiple lines")
-        self.action.setStatusTip("Permanently join multiple lines (removes lines used for joining)")
+        self.action.setStatusTip(
+            "Permanently join multiple lines (removes lines used for joining)"
+        )
 
         self.action.triggered.connect(self.run)
 
-        if hasattr( self.iface, "addPluginToVectorMenu" ):
-            self.iface.addVectorToolBarIcon(self.action)
-            self.iface.addPluginToVectorMenu("&Join multiple lines", self.action)
-        else:
-            self.iface.addToolBarIcon(self.action)
-            self.iface.addPluginToMenu("&Join multiple lines", self.action)
+        self.iface.addVectorToolBarIcon(self.action)
+        self.iface.addPluginToVectorMenu("&Join multiple lines", self.action)
 
     def unload(self):
-        if hasattr( self.iface, "addPluginToVectorMenu" ):
-            self.iface.removePluginVectorMenu("&Join multiple lines",self.action)
-            self.iface.removeVectorToolBarIcon(self.action)
-        else:
-            self.iface.removePluginMenu("&Join multiple lines",self.action)
-            self.iface.removeToolBarIcon(self.action)
+        self.iface.removePluginVectorMenu("&Join multiple lines", self.action)
+        self.iface.removeVectorToolBarIcon(self.action)
 
-    def Distance(self, vertex1, vertex2):
+    def _distance(self, vertex1, vertex2):
         return vertex1.distanceSquared(vertex2)
 
-    def FirstVertex(self, geom):
+    def _first_vertex(self, geom):
         return geom.vertexAt(0)
 
-    def LastVertexIndex(self, geom):
-        return len(geom.asPolyline()) - 1
+    def _last_vertex(self, geom):
+        return geom.vertexAt(len(geom.asPolyline()) - 1)
 
-    def LastVertex(self, geom):
-        return geom.vertexAt(self.LastVertexIndex(geom))
-
-    def Step(self, geom, queue_list):
+    def _step(self, geom, queue_list):
         if geom is None:
-            if len(queue_list) > 0:
+            if queue_list:
                 return queue_list.pop()
-            else:
-                return None
-        base_firstvertex = self.FirstVertex(geom)
-        base_lastvertex = self.LastVertex(geom)
+            return None
+
+        base_firstvertex = self._first_vertex(geom)
+        base_lastvertex = self._last_vertex(geom)
         found_geom = None
         found_distance = 0
+        found_base_reverse = False
+        found_i_reverse = False
+
         for i_geom in queue_list:
-            i_firstvertex = self.FirstVertex(i_geom)
-            i_lastvertex = self.LastVertex(i_geom)
-            distance_baselast_ifirst = self.Distance(base_lastvertex, i_firstvertex)
-            distance_baselast_ilast = self.Distance(base_lastvertex, i_lastvertex)
-            distance_basefirst_ifirst = self.Distance(base_firstvertex, i_firstvertex)
-            distance_basefirst_ilast = self.Distance(base_firstvertex, i_lastvertex)
+            i_firstvertex = self._first_vertex(i_geom)
+            i_lastvertex = self._last_vertex(i_geom)
+            distance_baselast_ifirst = self._distance(base_lastvertex, i_firstvertex)
+            distance_baselast_ilast = self._distance(base_lastvertex, i_lastvertex)
+            distance_basefirst_ifirst = self._distance(base_firstvertex, i_firstvertex)
+            distance_basefirst_ilast = self._distance(base_firstvertex, i_lastvertex)
             distance = distance_baselast_ifirst
             base_reverse = False
             i_reverse = False
@@ -131,11 +126,12 @@ class joinmultiplelines:
                 distance = distance_basefirst_ilast
                 base_reverse = True
                 i_reverse = True
-            if (found_geom is None) or (distance < found_distance):
+            if found_geom is None or distance < found_distance:
                 found_geom = i_geom
                 found_distance = distance
                 found_base_reverse = base_reverse
                 found_i_reverse = i_reverse
+
         if found_geom is not None:
             queue_list.remove(found_geom)
             geom_line = geom.constGet()
@@ -150,46 +146,64 @@ class joinmultiplelines:
             geom_line.append(found_geom_line)
             geom.set(geom_line)
             return geom
-        else:
-            return None
+
+        return None
 
     def run(self):
         cl = self.iface.mapCanvas().currentLayer()
 
-        if (cl == None):
-            self.iface.messageBar().pushMessage("Join multiple lines","No layers selected", Qgis.Warning, 10)
+        if cl is None:
+            self.iface.messageBar().pushMessage(
+                "Join multiple lines",
+                "No layers selected",
+                Qgis.MessageLevel.Warning,
+                10,
+            )
             return
-        if (cl.type() != cl.VectorLayer):
-            self.iface.messageBar().pushMessage("Join multiple lines","Not a vector layer", Qgis.Warning, 10)
+        if cl.type() != Qgis.LayerType.Vector:
+            self.iface.messageBar().pushMessage(
+                "Join multiple lines",
+                "Not a vector layer",
+                Qgis.MessageLevel.Warning,
+                10,
+            )
             return
-        if cl.geometryType() != QgsWkbTypes.LineGeometry:
-            self.iface.messageBar().pushMessage("Join multiple lines","Not a line layer", Qgis.Warning, 10)
+        if cl.geometryType() != Qgis.GeometryType.Line:
+            self.iface.messageBar().pushMessage(
+                "Join multiple lines",
+                "Not a line layer",
+                Qgis.MessageLevel.Warning,
+                10,
+            )
             return
 
         selfeats = cl.selectedFeatures()
-        if (len(selfeats) < 2):
-            self.iface.messageBar().pushMessage("Join multiple lines","At least two lines should be selected", Qgis.Warning, 10)
+        if len(selfeats) < 2:
+            self.iface.messageBar().pushMessage(
+                "Join multiple lines",
+                "At least two lines should be selected",
+                Qgis.MessageLevel.Warning,
+                10,
+            )
             return
 
         geomlist = []
         for feat in selfeats:
             geom = QgsGeometry(feat.geometry())
             if geom.isMultipart():
-                for geom_i in geom.asGeometryCollection():
-                    geomlist.append(geom_i)
+                geomlist.extend(geom.asGeometryCollection())
             else:
                 geomlist.append(geom)
 
         newgeom = None
-        while len(geomlist) > 0:
-            newgeom = self.Step(newgeom, geomlist)
+        while geomlist:
+            newgeom = self._step(newgeom, geomlist)
 
         cl.startEditing()
-        cl.beginEditCommand( "Join multiple lines" )
-        cl.changeGeometry( selfeats[0].id(), newgeom )
-        for feat in selfeats:
-            if feat != selfeats[0]:
-                cl.deleteFeature( feat.id() )
+        cl.beginEditCommand("Join multiple lines")
+        cl.changeGeometry(selfeats[0].id(), newgeom)
+        for feat in selfeats[1:]:
+            cl.deleteFeature(feat.id())
 
         cl.endEditCommand()
         self.iface.mapCanvas().refresh()
