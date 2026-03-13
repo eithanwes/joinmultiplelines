@@ -1,6 +1,7 @@
 Join multiple lines
 ===================
-By Daan Goedkoop
+Original work by Daan Goedkoop
+Fork by Eithan Weiss Schonberg
 
 Introduction
 ------------
@@ -23,16 +24,20 @@ characteristics of the plugin.
 Version history
 ---------------
 
-* 0.1: 26-04-2013
-     * Initial version
-* 0.2: 29-04-2013
-     * Produce valid geometry if begin and end vertices are identical.
-* 0.3: 03-02-2014
+* 1.0.0: 2026-03-13
+     * QGIS 4 compatibility
+     * Class and method name changes
+     * Code refactoring and cleanup
+* 0.4.1: 2018-11-30
+     * Bug fix for displaying warnings
+* 0.4: 2018-01-22
+     * Update for QGis 3.0
+     * Support multi-part lines
+* 0.3: 2014-02-03
      * Update for QGis 2.0
      * Operation is now a single undo/redo-step, instead of having a
        separate step for the removal of the superfluous features.
-* 0.4: 22-01-2018
-     * Update for QGis 3.0
-     * Support multi-part lines
-* 0.4.1: 30-11-2018
-     * Bug fix for displaying warnings
+* 0.2: 2013-04-29
+     * Produce valid geometry if begin and end vertices are identical.
+* 0.1: 2013-04-26
+     * Initial version
