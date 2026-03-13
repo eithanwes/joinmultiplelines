@@ -1,6 +1,7 @@
 Join multiple lines
 ===================
 Original work by Daan Goedkoop
+
 Fork by Eithan Weiss Schonberg
 
 Introduction
